@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>忘れられた書斎からの脱出</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #333;
+            color: #eee;
+            overflow: hidden;
+        }
+
+        #game-container {
+            width: 900px;
+            height: 600px;
+            margin: 30px auto;
+            border: 5px solid #555;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+            position: relative;
+            background-color: #222;
+            overflow: hidden;
+        }
+
+        #game-screen {
+            width: 100%;
+            height: calc(100% - 100px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .room {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-size: cover;
+            background-position: center;
+            background-color: #444;
+            display: none; /* 裏にいる部屋は隠す */
+        }
+
+        .room.active {
+            display: block; /* アクティブな部屋だけ表示する */
+        }
+
+        #room-north { background-image: url('room_north.png'); }
+        #room-east { background-image: url('room_east.png'); }
+        #room-south { background-image: url('room_south.png'); }
+        #room-west { background-image: url('room_west.png'); }
+
+        .hotspot {
+            position: absolute;
+            background-color: rgba(255, 255, 0, 0);
+            border: 2px dashed rgba(255, 255, 0, 0);
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .hotspot:hover {
+            background-color: rgba(255, 255, 0, 0.1);
+            border-color: rgba(255, 255, 0, 0.5);
+        }
+
+        .arrow {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: rgba(100, 100, 255, 0.3);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            color: white;
+            opacity: 0.7;
+            transition: opacity 0.2s, background-color 0.2s;
+            z-index: 5;
+        }
+        .arrow:hover {
+            opacity: 1;
+            background-color: rgba(100, 100, 255, 0.6);
+        }
+
+        #message-area {
+            height: 55px;
+            background-color: #1a1a1a;
+            border-top: 2px solid #555;
+            padding: 0px;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+        #message-text { color: #ccc; }
+
+        #inventory {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            padding: 5px;
+        }
+
+        .inventory-slot {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #666;
+            margin-right: 5px;
+            background-color: #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .inventory-slot.active {
+            border-color: #FFD700;
+            box-shadow: 0 0 5px #FFD700;
+        }
+        .inventory-slot img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .item-get-animation {
+            position: absolute;
+            animation: itemGet 0.8s ease-out forwards;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        @keyframes itemGet {
+            0% { transform: scale(1) translate(0, 0); opacity: 1; }
+            50% { transform: scale(1.2) translate(0, -50px); opacity: 0.8; }
+            100% { transform: scale(0.5) translate(var(--target-x, 0), var(--target-y, 0)); opacity: 0; }
+        }
+
+        #end-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2em;
+            text-align: center;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 1.5s ease-in-out;
+        }
+        #end-screen.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        #end-screen button {
+            padding: 15px 30px;
+            font-size: 0.8em;
+            margin-top: 30px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #end-screen button:hover {
+            background-color: #0056b3;
+        }
+
+        /* ホットスポットのデザイン */
+        #hotspot-safe {
+            top: 140px !important;    
+            left: 550px !important;   
+            width: 100px !important;  
+            height: 120px !important; 
+            background-image: url('images/safe.png') !important; 
+            background-size: 100% 100% !important;
+            background-color: transparent !important;
+            border: none !important;
+            position: absolute;
+            z-index: 7 !important;
+        }
+        #hotspot-hollow {
+            top: 85px !important;    
+            left: 505px !important;   
+            width: 190px !important;   
+            height: 190px !important;  
+            background-image: url('images/hollow.png') !important; 
+            background-size: 100% 100% !important;
+            background-color: transparent !important;
+            border: none !important;
+            position: absolute;
+            z-index: 5 !important;
+        }
+        #hotspot-picture {
+            z-index: 10 !important;
+        }
+        #hotspot-flowerpot-dry {
+            top: 180px !important;
+            left: 550px !important;
+            width: 180px !important;
+            height: 180px !important;
+            background-image: url('images/flowerpot_dry.png') !important; 
+            background-size: 100% 100% !important;
+            background-color: transparent !important;
+            border: none !important;
+            position: absolute;
+            z-index: 5 !important;
+        }
+        #hotspot-flowerpot-watered {
+            top: 180px !important;
+            left: 550px !important;
+            width: 180px !important;
+            height: 180px !important;
+            background-image: url('images/flowerpot_watered.png') !important; 
+            background-size: 100% 100% !important;
+            background-color: transparent !important;
+            border: none !important;
+            position: absolute;
+            z-index: 5 !important;
+        }
+
+        /* ★追加：部屋移動時の黒い円のアニメーション用要素 */
+        #transition-circle {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 150vmax; /* 画面全体を覆う大きさ */
+            height: 150vmax;
+            background-color: black;
+            border-radius: 50%; /* まん丸にする */
+            transform: translate(-50%, -50%) scale(0); /* 初期状態は見えないサイズ */
+            opacity: 1; 
+            z-index: 9999;
+            pointer-events: none; /* 下の要素をクリックできるようにする */
+        }
+        /* 1. 黒い円が広がるアニメーション */
+        #transition-circle.expand {
+            transition: transform 1.5s ease-in; /* 0.6秒から1.5秒に変更 */
+            transform: translate(-50%, -50%) scale(1);
+        }
+        /* 2. 黒が薄まって消えるアニメーション */
+        #transition-circle.fade-out {
+            transition: opacity 2s ease-out; /* 0.6秒から2秒に変更 */
+            opacity: 0;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="transition-circle"></div>
+
+    <div id="game-container">
+        <div id="game-screen">
+            <div id="room-north" class="room active"></div>
+            <div id="room-east" class="room"></div>
+            <div id="room-south" class="room"></div>
+            <div id="room-west" class="room"></div>
+        </div>
+
+        <div id="message-area">
+            <span id="message-text">目が覚めると、あなたは薄暗い書斎に閉じ込められていました。</span>
+        </div>
+        <div id="inventory">
+            <div class="inventory-slot"></div>
+            <div class="inventory-slot"></div>
+            <div class="inventory-slot"></div>
+            <div class="inventory-slot"></div>
+            <div class="inventory-slot"></div>
+            <div class="inventory-slot"></div> 
+            <div class="inventory-slot"></div> 
+        </div>
+
+        <div id="end-screen">
+            <h1>脱出成功！</h1>
+            <p>書斎の謎を解き明かし、あなたは自由の身になりました！</p>
+            <button onclick="location.href='https://docs.google.com/forms/d/e/1FAIpQLScbbII9vQUONJT-yxYo7ee6nq51R7u5vBWtFX55GvOBaVgDqQ/viewform?usp=header'">アンケートページへ</button>
+        </div>
+    </div>
+
+    <script>
+        const gameState = {
+            currentRoom: 'north',
+            inventory: [],
+            flags: {
+                keyFound: false,
+                pictureMoved: false,
+                deskOpened: false,
+                plantWatered: false,
+                bookshelfSearched: false,
+                safeOpened: false,
+                doorUnlocked: false,
+                finalCodeFound: false,
+            },
+            selectedItem: null,
+            isAnimating: false // ★追加：アニメーション中かどうかを判定するフラグ
+        };
+
+        const rooms = {
+            north: {
+                hotspots: [
+                    { id: 'hotspot-door', top: '130px', left: '200px', width: '200px', height: '300px', action: 'examine_door',img: 'images/door.png' },
+                    { id: 'hotspot-picture', top: '80px', left: '500px', width: '200px', height: '200px', action: 'examine_picture', img: 'images/picture.png' },
+                    { id: 'hotspot-hollow', action: 'examine_hollow' }
+                ],
+                arrows: [
+                    { id: 'arrow-north-east', direction: 'east', style: 'top: calc(50% - 25px); right: 0px;', text: '→' },
+                    { id: 'arrow-north-west', direction: 'west', style: 'top: calc(50% - 25px); left: 0px;', text: '←' },
+                    { id: 'arrow-north-south', direction: 'south', style: 'bottom: 10px; left: calc(50% - 25px);', text: '↓' }
+                ]
+            },
+            east: {
+                hotspots: [
+                    { id: 'hotspot-bookshelf', top: '42px', left: '385px', width: '350px', height: '400px', action: 'examine_bookshelf',img: 'images/bookshelf.png' },
+                ],
+                arrows: [
+                    { id: 'arrow-east-north', direction: 'north', style: 'top: calc(50% - 25px); left: 0px;', text: '←' },
+                ]
+            },
+            south: {
+                hotspots: [
+                    { id: 'hotspot-window', top: '80px', left: '360px', width: '180px', height: '150px', action: 'examine_window',img: 'images/window.png' },
+                    { id: 'hotspot-flowerpot-dry', action: 'examine_flowerpot' }
+                ],
+                arrows: [
+                    { id: 'arrow-south-north', direction: 'north', style: 'bottom: 10px; left: calc(50% - 25px);', text: '↓' }
+                ]
+            },
+            west: {
+                hotspots: [
+                    { id: 'hotspot-desk', top: '295px', left: '200px', width: '300px', height: '180px', action: 'examine_desk',img: 'images/desk.png' },
+                    { id: 'hotspot-trash', top: '355px', left: '600px', width: '80px', height: '100px', action: 'examine_trash', img: 'images/trash.png' },
+                ],
+                arrows: [
+                    { id: 'arrow-west-north', direction: 'north', style: 'top: calc(50% - 25px); right: 0px;', text: '→' },
+                ]
+            },
+        };
+
+        const items = {
+            'safe_key': { name: '金庫の鍵', img: 'images/safe_key.png' },
+            'light': { name: 'ライト', img: 'images/light.png' },
+            'pet_bottle': { name: 'ペットボトル', img: 'images/pet_bottle.png' },
+            'memo': { name: '観葉植物の下と書かれたメモ', img: 'images/memo.png' },
+            'password_A': { name: '脱出口の暗証番号A', img: 'images/password_A.png' },
+            'password_B': { name: '脱出口の暗証番号B', img: 'images/password_B.png' },
+            'password_C': { name: '脱出口の暗証番号C', img: 'images/password_C.png' }
+        };
+
+        const gameScreen = document.getElementById('game-screen');
+        const messageText = document.getElementById('message-text');
+        const inventorySlots = document.querySelectorAll('.inventory-slot');
+        const endScreen = document.getElementById('end-screen');
+        const inventoryContainer = document.getElementById('inventory'); 
+
+        function showMessage(msg) {
+            messageText.textContent = msg;
+        }
+
+        function itemGetAnimation(itemId, hotspotElement) {
+            const itemImgSrc = items[itemId].img;
+            const itemAnimElement = document.createElement('img');
+            itemAnimElement.src = itemImgSrc;
+            itemAnimElement.className = 'item-get-animation';
+            
+            const rect = hotspotElement.getBoundingClientRect();
+            const gameScreenRect = gameScreen.getBoundingClientRect();
+            itemAnimElement.style.left = `${rect.left - gameScreenRect.left + rect.width / 2 - 15}px`; 
+            itemAnimElement.style.top = `${rect.top - gameScreenRect.top + rect.height / 2 - 15}px`;
+
+            const itemIndex = gameState.inventory.indexOf(itemId);
+            const targetSlot = inventorySlots[itemIndex];
+            
+            if (targetSlot) {
+                const targetRect = targetSlot.getBoundingClientRect();
+                itemAnimElement.style.setProperty('--target-x', `${targetRect.left - gameScreenRect.left - parseInt(itemAnimElement.style.left, 10)}px`);
+                itemAnimElement.style.setProperty('--target-y', `${targetRect.top - gameScreenRect.top - parseInt(itemAnimElement.style.top, 10)}px`);
+            }
+
+            gameScreen.appendChild(itemAnimElement);
+
+            itemAnimElement.addEventListener('animationend', () => {
+                itemAnimElement.remove();
+                updateInventoryDisplay(); 
+            });
+        }
+
+        function updateInventoryDisplay() {
+            inventorySlots.forEach((slot, index) => {
+                slot.innerHTML = ''; 
+                slot.classList.remove('active'); 
+
+                if (gameState.inventory[index]) {
+                    const item = gameState.inventory[index];
+                    const img = document.createElement('img');
+                    img.src = items[item].img;
+                    img.alt = items[item].name;
+                    slot.appendChild(img);
+                    slot.dataset.item = item; 
+                    if (gameState.selectedItem === item) {
+                        slot.classList.add('active');
+                    }
+                } else {
+                    slot.dataset.item = "none";
+                }
+            });
+        }
+
+        function pickUpItem(itemId, hotspotElement = null) {
+            if (gameState.inventory.length < inventorySlots.length) {
+                if (!gameState.inventory.includes(itemId)) { 
+                    gameState.inventory.push(itemId);
+                    if (hotspotElement) {
+                        itemGetAnimation(itemId, hotspotElement); 
+                    } else {
+                        updateInventoryDisplay(); 
+                    }
+                    showMessage(`${items[itemId].name}を手に入れた！`);
+                    return true;
+                } else {
+                    showMessage(`${items[itemId].name}はもう持っている。`);
+                    return false;
+                }
+            } else {
+                showMessage('これ以上アイテムは持てないようだ。');
+                return false;
+            }
+        }
+
+        // ★変更：部屋移動のアニメーション処理にクリック防止機能を追加
+        function changeRoom(newRoomId) {
+            // ★追加：アニメーション中なら処理を中断（連打防止）
+            if (gameState.isAnimating) return;
+            
+            // ★追加：アニメーション開始フラグを立てる
+            gameState.isAnimating = true;
+
+            const currentRoomElement = document.getElementById(`room-${gameState.currentRoom}`);
+            const newRoomElement = document.getElementById(`room-${newRoomId}`);
+            
+            if (!newRoomElement) {
+                gameState.isAnimating = false; // エラー時はフラグを戻す
+                return;
+            }
+
+            const transitionCircle = document.getElementById('transition-circle');
+
+            // 1. 円の透明化を解除し、拡大させて画面を真っ黒にする
+            transitionCircle.classList.remove('fade-out'); 
+            transitionCircle.classList.add('expand');
+
+            // 1.5秒後（画面が真っ黒になったタイミング）に裏側で部屋を切り替える
+            setTimeout(() => {
+                gameState.currentRoom = newRoomId;
+                renderRoom(newRoomId); 
+
+                // 部屋の表示/非表示を切り替え
+                currentRoomElement.classList.remove('active');
+                newRoomElement.classList.add('active'); 
+
+                // 古い部屋のアイテムや矢印を掃除
+                currentRoomElement.querySelectorAll('.hotspot').forEach(hs => hs.remove());
+                currentRoomElement.querySelectorAll('.arrow').forEach(arrow => arrow.remove());
+
+                // 2. 画面の黒をフェードアウトさせて消す
+                transitionCircle.classList.add('fade-out');
+
+                // さらに2秒後（フェードアウト完了後）に、円のサイズを元の見えないサイズに戻す
+                setTimeout(() => {
+                    transitionCircle.classList.remove('expand');
+                    
+                    // ★追加：アニメーションが完全に終わったのでフラグを戻し、クリックを解禁
+                    gameState.isAnimating = false;
+                }, 2000);
+
+            }, 1500); 
+        }
+
+        function renderRoom(roomId) {
+            const roomData = rooms[roomId];
+            const roomElement = document.getElementById(`room-${roomId}`);
+
+            roomData.hotspots.forEach(hs => {
+                const div = document.createElement('div');
+                div.id = hs.id;
+                div.className = 'hotspot';
+                div.style.top = hs.top;
+                div.style.left = hs.left;
+                div.style.width = hs.width;
+                div.style.height = hs.height;
+                div.dataset.action = hs.action;
+
+                if (hs.img) {
+                    div.style.backgroundImage = `url('${hs.img}')`;
+                    div.style.backgroundSize = '100% 100%';
+                    div.style.backgroundColor = 'transparent';
+                    div.style.border = 'none';
+                }
+
+                roomElement.appendChild(div);
+            });
+
+            roomData.arrows.forEach(arrow => {
+                const div = document.createElement('div');
+                div.id = arrow.id;
+                div.className = 'arrow';
+                div.style.cssText = arrow.style; 
+                div.dataset.direction = arrow.direction;
+                div.innerHTML = arrow.text;
+                roomElement.appendChild(div);
+            });
+        }
+
+        gameScreen.addEventListener('click', (event) => {
+            // ★追加：アニメーション中は画面内のクリックを無視
+            if (gameState.isAnimating) return; 
+
+            const target = event.target;
+            const action = target.dataset.action;
+            const direction = target.dataset.direction;
+
+            if (direction) {
+                changeRoom(direction);
+                showMessage(`あなたは${direction}の壁に移動した。`);
+                gameState.selectedItem = null; 
+                updateInventoryDisplay();
+                return;
+            }
+
+            if (action) {
+                performAction(action, target);
+            }
+        });
+
+        inventoryContainer.addEventListener('click', (event) => {
+            // ★追加：アニメーション中はアイテム欄のクリックも無視
+            if (gameState.isAnimating) return; 
+
+            const slot = event.target.closest('.inventory-slot');
+            if (slot && slot.dataset.item !== 'none') {
+                const itemId = slot.dataset.item;
+                if (gameState.selectedItem === itemId) {
+                    gameState.selectedItem = null;
+                    showMessage(`${items[itemId].name}の選択を解除した。`);
+                } else {
+                    gameState.selectedItem = itemId;
+                    showMessage(`${items[itemId].name}を選択した。`);
+                }
+                updateInventoryDisplay(); 
+            } else if (slot) {
+                 showMessage('何も入っていない。');
+            }
+        });
+
+        function performAction(action, targetElement) {
+            let message = '';
+            const currentRoomId = gameState.currentRoom;
+            const selectedItem = gameState.selectedItem;
+
+            switch (action) {
+                case 'examine_desk':
+                    if (currentRoomId !== 'west') return;
+                    if (!gameState.flags.deskOpened) {
+                        message = '引き出しを開けた！「金庫の鍵」を手に入れた！';
+                        gameState.flags.deskOpened = true;
+                        pickUpItem('safe_key'); 
+                    } else {
+                        message = '机の中はもう空っぽだ。';
+                    }
+                    break;
+
+                case 'examine_trash':
+                    if (currentRoomId !== 'west') return;
+                    if (!gameState.flags.trashSearched) {
+                        message = 'ゴミ箱の中を探ると、底から「ライト」を見つけた！';
+                        gameState.flags.trashSearched = true;
+                        pickUpItem('light'); 
+                    } else {
+                        message = 'ゴミ箱にはもう何もない。';
+                    }
+                    break;
+
+                case 'examine_picture':
+                    if (currentRoomId !== 'north') return;
+                    if (!gameState.flags.pictureMoved) {
+                        message = '壁にかかった風景画を外すと、後ろから金庫が現れた！';
+                        gameState.flags.pictureMoved = true;
+                        
+                        if (targetElement) {
+                            targetElement.remove();
+                        }
+
+                        rooms.north.hotspots = rooms.north.hotspots.filter(function(hotspot) {
+                            return hotspot.action !== 'examine_picture';
+                        });
+
+                        rooms.north.hotspots.push({
+                            id: 'hotspot-safe', top: '50px', left: '350px', action: 'examine_safe'
+                        });
+
+                        const safeHotspot = document.createElement('div');
+                        safeHotspot.id = 'hotspot-safe';
+                        safeHotspot.className = 'hotspot';
+                        safeHotspot.dataset.action = 'examine_safe';
+                        document.getElementById('room-north').appendChild(safeHotspot);
+                        
+                    } else {
+                        message = '絵画のあった場所には金庫が埋め込まれている。';
+                    }
+                    break;
+
+                case 'examine_safe':
+                    if (currentRoomId !== 'north') return;
+                    if (!gameState.flags.safeOpened) {
+                        if (selectedItem === 'safe_key') {
+                            message = '鍵を使って金庫を開けた！中から「ペットボトル」を手に入れた！';
+                            gameState.flags.safeOpened = true;
+                            pickUpItem('pet_bottle'); 
+                        } else {
+                            message = '頑丈な金庫だ。開けるには鍵が必要そうだ。';
+                        }
+                    } else {
+                        message = '金庫はもう開いている。中は空だ。';
+                    }
+                    break;
+
+                case 'examine_flowerpot':
+                    if (currentRoomId !== 'south') return;
+
+                    if (selectedItem === 'pet_bottle') {
+                        if (!gameState.flags.plantWatered) {
+                            message = '元気になった植物の葉っぱの間に「脱出口の暗証番号A」が隠されていた！';
+                            gameState.flags.gotPlantKey = true;
+                            pickUpItem('password_A');
+                            gameState.flags.plantWatered = true;
+
+                            if (targetElement) {
+                                targetElement.remove();
+                            }
+                            rooms.south.hotspots = rooms.south.hotspots.filter(function(h) {
+                                return h.id !== 'hotspot-flowerpot-dry';
+                            });
+                            rooms.south.hotspots.push({
+                                id: 'hotspot-flowerpot-watered', action: 'examine_flowerpot'
+                            });
+                            const wateredPlant = document.createElement('div');
+                            wateredPlant.id = 'hotspot-flowerpot-watered';
+                            wateredPlant.className = 'hotspot';
+                            wateredPlant.dataset.action = 'examine_flowerpot';
+                            document.getElementById('room-south').appendChild(wateredPlant);
+                        }
+                        break; 
+                    }
+
+                    if (gameState.flags.bookshelfSearched && !gameState.flags.plantBottomSearched) {
+                        message = 'メモをヒントに植木鉢の底を裏返してみると……「脱出口の暗証番号C」が貼り付けられていた！';
+                        gameState.flags.plantBottomSearched = true;
+                        pickUpItem('password_C');
+                    }
+                    else {
+                        if (gameState.flags.plantWatered) {
+                            message = '元気な植物だ。葉っぱの間も底も、もう調べ尽くした。';
+                        } else {
+                            message = '植木鉢の植物がカラカラに乾いている。水をあげないと枯れてしまいそうだ……。';
+                        }
+                    }
+                    break;
+
+                case 'examine_window':
+                    if (currentRoomId !== 'south') return;
+
+                    if (gameState.flags.windowIlluminated) {
+                        message = '暗証番号Bが隠されていた窓だ。もう調べても何もない。';
+                    } else if (selectedItem === 'light') {
+                        message = 'ライトで暗い窓枠を照らした！暗がりから「脱出口の暗証番号B」を発見した！';
+                        gameState.flags.windowIlluminated = true;
+                        pickUpItem('password_B'); 
+                    } else {
+                        message = '窓の外は真っ暗で何も見えない。';
+                    }
+                    break;
+
+                case 'examine_bookshelf':
+                    if (currentRoomId !== 'east') return;
+                    if (!gameState.flags.bookshelfSearched) {
+                        message = '本棚を調べると、本の間から『観葉植物の底』と書かれた「メモ」を発見した！';
+                        gameState.flags.bookshelfSearched = true;
+                        pickUpItem('memo'); 
+                    } else {
+                        message = 'たくさんの本が並んでいる。もうめぼしいものはなさそうだ。';
+                    }
+                    break;
+
+                case 'examine_door':
+                    if (currentRoomId !== 'north') return;
+                    if (gameState.flags.plantWatered && gameState.flags.windowIlluminated && gameState.flags.plantBottomSearched) {
+                        message = '暗証番号A、B、Cを入力した……ガチャッ！扉が開いた！脱出成功！！';
+                        gameState.flags.doorUnlocked = true;
+                        if (typeof endGame === 'function') {
+                            endGame(); 
+                        }
+                    } else {
+                        message = '頑丈な扉だ。キーパッドがついている。どうやら暗証番号が3つ（A, B, C）必要なようだ……。';
+                    }
+                    break;
+            }
+            showMessage(message);
+            if (selectedItem && (message.includes('使っ') || message.includes('やった'))) {
+                 gameState.selectedItem = null;
+                 updateInventoryDisplay();
+            }
+        }
+
+        function removeItemFromInventory(itemId) {
+            const index = gameState.inventory.indexOf(itemId);
+            if (index > -1) {
+                gameState.inventory.splice(index, 1);
+                updateInventoryDisplay();
+            }
+        }
+
+        function endGame() {
+            endScreen.classList.add('active');
+            gameScreen.style.pointerEvents = 'none';
+        }
+
+        function initGame() {
+            renderRoom(gameState.currentRoom);
+            updateInventoryDisplay(); 
+            showMessage('目が覚めると、あなたは薄暗い書斎に閉じ込められていました。');
+        }
+
+        initGame(); 
+    </script>
+</body>
+</html>
